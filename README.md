@@ -101,10 +101,13 @@ SharePoint is a typical example of this, with lists, files, and permissions that
 
 A `stdWebView` UserForm can sit in the gap. The user signs in to the real web app inside the control; you reuse that session (for example via cookies) to call the same APIs and pages the browser would, on their behalf. Or you skip deep integration and simply host a small HTML UI that wraps a narrow task with extra buttons, validation, or a wizard. These controls can be integrated into the host application, retaining the feeling like they're part of the tool they already use.
 
-[Link to project](https://github.com/sancarn/stdVBA-examples/tree/main/Examples/WebView/4.%20Sharepoint%20Updator)
+[Link to project - sharepoint updator](https://github.com/sancarn/stdVBA-examples/tree/main/Examples/WebView/4.%20Sharepoint%20Updator)
 
-![Sharepoint Updator](TODO:...)
-![Powerline Example](TODO:...)
+![Sharepoint Updator](./case-studies/03-existing-webapps/sharepoint-auth-window.png)
+
+[Link to project - pylon augmentation](https://github.com/sancarn/stdVBA-examples/tree/main/Examples/WebView/6.%20Augment%20pylon%20map)
+
+![Powerline Example](./case-studies/03-existing-webapps/pylon-mapper.mp4)
 
 ### Data flows driven by node editors
 
