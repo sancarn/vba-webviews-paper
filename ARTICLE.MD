@@ -1,14 +1,12 @@
-# Title (Working)
-
-**`stdWebView`: A VBA-Native Pattern for Portable, Interactive Process Visualisation and Business Workflow Automation**
-
 **Keywords:** VBA, WebView2, Excel automation, process engineering, business process automation, interactive visualisation
 
 ---
 
+# `stdWebView`: Embedding Modern Web Interfaces in Legacy VBA Systems with WebView2
+
 ## Abstract
 
-Interactive interfaces for engineering and business process analysis are often implemented as heavyweight web applications that require specialist web skills and ongoing maintenance. In many industrial environments, however, Microsoft Excel and VBA remain the most accessible integration layer for operational data, reporting, and decision support. This paper presents `stdWebView`, an open source VBA class module that embeds Microsoft Edge WebView2 in VBA UserForms, enabling rich HTML/CSS/JavaScript interfaces while retaining VBA as the orchestration layer.
+Interactive interfaces for engineering and business process analysis are often implemented as heavyweight web applications that require specialist web skills and ongoing maintenance. In many industrial environments, however, Microsoft Excel and Visual Basic for Applications (VBA) remain the most accessible integration layer for operational data, reporting, and decision support. This paper presents `stdWebView`, an open source VBA class module that embeds Microsoft Edge WebView2 in VBA UserForms, enabling rich HTML/CSS/JavaScript interfaces while retaining VBA as the orchestration layer.
 
 We describe the architecture of `stdWebView`, practical interop patterns (host object injection, script execution, and request interception), and representative examples that demonstrate how portable, maintainable interfaces can be delivered without introducing server infrastructure. _We also outline domain case studies spanning chemical, food, infrastructure, and process management contexts, and propose a set of reusable example templates for business process and website automation._
 
@@ -227,16 +225,14 @@ All things considered, cyber security is a major consideration with this technol
 For additional guidance on how to keep `WebView2` applications secure, check out the Microsoft security guidance[<sup>[22]</sup>](#ref-22 "Microsoft Learn: WebView2 security guidance").
 
 ## 5. Conclusion
-Summarize:
-
-stdWebView as a bridge between VBA and web UI
-practical value in Office-centric environments
-future work: broader examples, empirical validation, more sector-specific case studies
 
 
-Additionally, many JavaScript ecosystem tools rely on build pipelines and frameworks (Webpack, Vite, React, etc.), introducing even more options, abstractions, and dependencies into your development process. For some VBA developers, the simplicity and constraint of native VBA components might actually be preferable, and what you can do is tightly bounded by what VBA provides out of the box.
 
-However, for advanced developers or those who prioritize effective, ergonomic user experiences, webview-based forms are vastly more capable and adaptable. The ability to leverage web tooling and workflows often outweighs the steeper setup cost and learning curve, but the right choice will depend on your project's priorities and the team's familiarity with both toolchains.
+This paper has argued that embedding WebView2 in VBA is not simply a cosmetic upgrade to UserForms, but a practical architectural pattern for extending the lifespan and capability of systems built in Microsoft Office. `stdWebView` demonstrates that rich, modern interfaces can be integrated into existing Excel/VBA workflows while retaining VBA as the orchestration layer for data access, automation logic, and enterprise integration.
+
+Across the examples presented, the key value lies in establishing a repeatable bridge between VBA and web runtimes. With this approach, VBA drives the interface, JavaScript can call back into controlled host objects, and request interception enables modern programming patterns without the need for dedicated server infrastructure. This structure allows teams to modernize incrementally, upgrading the most fragile UI layers first and avoiding the need for wholesale migration.
+
+The approach does introduce trade-offs, including a steeper cross-stack learning curve, Windows/WebView2 platform constraints, and meaningful security responsibilities when exposing host capabilities to web content. That said, for many internal engineering and operations tools, these constraints are often preferable to the cost and disruption of full platform replacement. In that context, `stdWebView` offers a pragmatic middle path: preserve proven VBA assets, adopt modern interface practices where they deliver clear value, and evolve legacy systems in controlled, maintainable stages.
 
 ## References
 
@@ -262,34 +258,38 @@ However, for advanced developers or those who prioritize effective, ergonomic us
 * <a id="ref-20"></a>[20] author: Leandro Ascierto. VBA resource file editor. https://leandroascierto.com/blog/vba-resource-file-editor/
 * <a id="ref-21"></a>[21] BleepingComputer. Windows 11 Notepad flaw let files execute silently via markdown links. https://www.bleepingcomputer.com/news/microsoft/windows-11-notepad-flaw-let-files-execute-silently-via-markdown-links/
 * <a id="ref-22"></a>[22] Microsoft Learn. WebView2 security guidance. https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security?tabs=dotnetcsharp
-----
+
+
+<!--
 
 ## Dev Remarks:
 
-inlude it if it answers one of these:
+* TOADD: At OpenCL: It seems directX does have shaders:
 
-* Why was this hard in VBA?
-* What architectural pattern made it possible?
-* What part of the implementation would another advanced VBA developer need to understand to reproduce or extend the approach?
-* What demonstrates that this is more than just "host a browser control"?
+```c
+const char* src =
+    "float4 main() : SV_Target { return float4(1,0,0,1); }";
 
-Do not include it if it is mainly:
+ID3DBlob* code = NULL;
+ID3DBlob* errors = NULL;
 
-* every low-level trick you used,
-* class-internals interesting only to VBA systems hackers,
-* undocumented mechanics that are not central to the paper's contribution.
-* Your thunk/vtable example
-
-What you described is absolutely interesting, because it gets at the real engineering challenge:
-
-* WebView2 expects callback interop at a lower level than idiomatic VBA normally exposes.
-* Therefore the class needs an interop layer that adapts pointer-based callbacks into object-oriented VBA methods.
-* That is likely part of the paper's genuine technical contribution.
-
-Include in Methods.
-
+HRESULT hr = D3DCompile(
+    src,
+    strlen(src),
+    "inline",
+    NULL,
+    NULL,
+    "main",
+    "ps_5_0",
+    0,
+    0,
+    &code,
+    &errors
+);
+```
 
 
 
 
 Search for: `’` and replace with `'`
+-->
