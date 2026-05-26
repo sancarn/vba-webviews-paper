@@ -1,0 +1,15 @@
+{
+  "name": "article-vba-webviews",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run build:docs",
+    "build:docs": "bun ./scripts/build-readme.ts"
+  },
+  "dependencies": {
+    "marked": "*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}
