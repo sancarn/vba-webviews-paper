@@ -22,7 +22,7 @@ VBA has seen little substantive evolution for decades and is often labeled a leg
 
 This reliance creates corresponding technical debt. Many VBA applications are assembled incrementally by non-specialists, yielding fragile codebases and UserForms that struggle with contemporary interaction patterns. For numerous internal tools, a full migration to a standalone web application is disproportionate in cost and delivery complexity. The emergence of generative AI accentuates the gap, since it is generally more effective at producing web UI code than at generating robust VBA architecture or maintainable UserForm logic. Restricted IT environments also keep VBA relevant as a practical integration layer for on-premise systems, local files, and legacy data sources that newer sandboxed platforms cannot easily reach.
 
-The central claim of this paper is that WebView2 integration is not merely a usability enhancement but an architectural requirement for many modern tools. Current workflows depend on capabilities that classic UserForms cannot efficiently deliver, including dynamic data grids, geospatial interfaces, graph and network visualisation, rich text components, and responsive layouts. Even with modern libraries such as `stdVBA`, closing this gap natively entails building and maintaining bespoke controls under a host not designed for today’s UI demands.
+The central claim of this paper is that WebView2 integration is not merely a usability enhancement but an architectural requirement for many modern tools. Current workflows depend on capabilities that classic UserForms cannot efficiently deliver, including dynamic data grids, geospatial interfaces, graph and network visualisation, rich text components, and responsive layouts. Even with modern libraries such as `stdVBA`, closing this gap natively entails building and maintaining bespoke controls under a host not designed for today's UI demands.
 
 Embedding WebView2 within VBA provides a pragmatic third path. It preserves existing Office automation and integration while unlocking the web ecosystem of UI frameworks and components. Teams can modernise incrementally, replacing the most fragile interfaces first, reusing proven web patterns, and improving maintainability without pausing operations. In effect, this approach evolves VBA systems so they meet present-day expectations for usability, reliability, and speed of change.
 
@@ -97,56 +97,127 @@ SharePoint is a typical example of this, with lists, files, and permissions that
 
 A `stdWebView` UserForm can sit in the gap. The user signs in to the real web app inside the control; you reuse that session (for example via cookies) to call the same APIs and pages the browser would, on their behalf. Or you skip deep integration and simply host a small HTML UI that wraps a narrow task with extra buttons, validation, or a wizard. These controls can be integrated into the host application, retaining the feeling like they're part of the tool they already use.
 
-![Sharepoint Updator](...)
-![Powerline Example](...)
+![Sharepoint Updator](TODO:...)
+![Powerline Example](TODO:...)
 
 ### Data flows driven by node editors
 
 When it comes to rendering VBA tends to offer strict controls that always draw the same kind of UI, and rarely do they allow truly custom looking UI to be created. Although it is possible to use [GDI32 or GDI+](...alesandro...) libraries targetting a hwnd to draw custom UI on top of a VBA userform, this tends to be convoluted and requires deep knowledge of the stacks in question. Additionally, if what you are rendering requires shaders, both GDI and GDI+ are a no-go, and the only viable alternative for anything close to GPU processing is OpenCL, yet another convoluted library to understand and execute under.
 
-In this case study we demonstrate a webview's usage to provide users with a low-code option for building data pipelines.
+Our pipeline editor case study shows how a webview could give users a low-code way to build data pipelines. Instead of trying to recreate a complex visual editor in native VBA controls, the interface can offer the kind of polished interactions people already expect from websites, from context-aware actions and searchable node insertion through to expression intellisense from table/file metadata.
 
+That richer experience comes from using HTML5, CSS, and JavaScript libraries for the frontend while keeping data persistence, business logic, and side-effects in VBA via `stdWebView`'s interoperability layer. The result is a more approachable and maintainable way to build dataflows than would be practical with VBA forms alone.
 
+### Benefits and trade-offs
 
-* Demonstrator applications
-    * ListObject viewer dashboard
-    * wuiUI
-    * SharePoint updater
-    * STC24 data entry cards
+Using webview userforms opens up a world of sophisticated UI features and access to the powerful ecosystem of modern JavaScript libraries, but this flexibility comes with a new set of complexities. Instead of spending most of your time on laborious VBA userform layouts, you're now navigating asynchronous JavaScript, cross-language communication, and the quirks of both JS/HTML/CSS and native VBA code. Debugging can become more involved and there are new deployment considerations, from ensuring that WebView2 is present, to managing security boundaries in mixed web/native applications. 
 
-* Observed benefits and trade-offs
+Additionally, many JavaScript ecosystem tools rely on build pipelines and frameworks (Webpack, Vite, React, etc.), introducing even more options, abstractions, and dependencies into your development process. For some VBA developers, the simplicity and constraint of native VBA components might be preferable.
 
 ## Technical Design of `stdWebView`
 
-3.1 - Architecture and lifecycle
-    - COM interop and callback adaptation
-    - Event dispatch and host integration
-3.2 Interaction model
-3.3 Deployment and security considerations
-3.4 Evaluation approach
+### Dependency free design
 
-This is where you explain:
+`stdWebView` creates an instance of `WebView2` using a pre-installed `WebView2Loader.dll`, which is included with Microsoft Excel as part of its PowerQuery integration. This approach, originally discovered by VBA user [tarboh](https://github.com/tarboh/WebView2-For-Excel-VBA), is notable for enabling the creation of a `WebView2` instance without needing to install additional type libraries or binaries—an action that would typically require admin rights, which is often infeasible in business environments. To bypass the requirement for a registered type library, Tarboh uses a well-known advanced technique [<sup>1</sup>](https://github.com/sancarn/stdVBA/blob/master/src/stdCOM.cls)<sup>,</sup>[<sup>2</sup>](TOhttps://www.vbforums.com/showthread.php?781595-VB6-Call-Functions-By-Pointer-(Universall-DLL-Calls)) where the `DispCallFunc` function from `OleAut32.dll` is used to invoke methods directly via their vtable (virtual method table) pointers and function offsets, effectively emulating the way C code might call COM object members. This technique provides late-bound, vtable-driven COM interop from VBA code with no external dependencies beyond what's already shipped with Office.
 
-initialization
-readiness callbacks
-cleanup
-data flow
-use of stdICallable
-runtime dependency on WebView2
-any reproducibility or comparison notes
+While tarboh's approach is arguably the most feature complete solution for WebView2 interop it falls into the classic VBA trap where it requires 6 dependencies. For small projects this makes the codebase feel verbose and over-engineered. Where `stdWebView` diverts away from tarboh's approach is by introducing a `Win64` port of an x86 thunk, used to create pointers to class' `public` instance methods. 
 
-## Discussion
+Ultimately, this design makes the vision of a dependency-free, self-contained `stdWebView` a reality. The entire module can be dropped into any project without extra complexity, setup, or separate installations. Further details on the technicalities of the mechanisms used to execute this are provided in the following sections.
 
-If the journal tolerates a Discussion section, use it. If not, you can merge this into Results or Conclusion.
+### Late-Bound COM Interop
 
-This section can cover:
+`WebView2` exposes much of its native API through COM interfaces and asynchronous callbacks. In C++ or .NET, a developer would normally implement the required callback interfaces directly and pass those objects to `WebView2`. VBA does not provide a convenient way to implement arbitrary `WebView2` callback interfaces, nor does it expose raw function pointers for instance methods in the way native APIs expect. As a result, `stdWebView` needs an interop layer that can both call `WebView2` methods and present VBA methods as callback targets. 
 
-where the approach works well
-when it is preferable to native forms
-when a full web app is still better
-maintainability implications
-the LLM point, if you want it somewhere explicit
+It's worth noting that much of this extra complexity comes from the desire to keep `stdWebView` entirely self-contained as a single class. For example, Tarboh's approach leverages the `AddressOf` mechanism to obtain function pointers to procedures in a standard module, which makes callback registration much simpler. However, this requires developers to add and manage extra modules, defeating the goal of a true single-drop, dependency-free solution. The design here deliberately avoids those dependencies, keeping all required logic encapsulated within one class.
 
+As documented in [API calbacks using an objects procedures](https://www.vbforums.com/showthread.php?898136-API-CallBacks-Using-an-Object-s-Procedure) VBA (and VB6) objects are COM objects, with the following VTable layout. Each object instance stores a pointer to its public vtable, the address returned by `ObjPtr(o)`, whose entries are laid out in memory beginning with the standard `IUnknown` and `IDispatch` methods, followed by pointers to the class's own developer defined public methods.
+
+```
+ObjPtr(o) --> [IUnknown::QueryInterface]
+              [IUnknown::AddRef]
+              [IUnknown::Release]
+              [IDispatch::GetTypeInfoCount]
+              [IDispatch::GetTypeInfo]
+              [IDispatch::GetIDsOfNames]
+              [IDispatch::Invoke]
+              [Public method 1]
+              [Public method 2]
+              ...
+              [Public method n]
+              [Private/Friend methods (arbitrary order)]
+```
+
+> Internally, the VB runtime maintains additional metadata immediately adjacent to the vtable (used for private members and other bookkeeping), but that is unrelated to this mechanism and not used here.
+
+### Adapting VBA Methods into Native Callbacks
+
+With a known pointer size (determined by the host's bitness), we can compute the address of the N‑th public method directly. However, locating that address is only half the challenge because object methods expect the `this` pointer (the object's instance) to be passed along with a method call, while a typical C callback jumps directly to a bare function address.
+
+To reconcile the two calling conventions, we (and Elroy) generate a small thunk, a short block of executable code, that prepends the object instance pointer each time the function is called. The address of the thunk is then returned and can be used as a conventional callback function pointer in APIs that expect one.
+
+In addition, our implementation introduces `EBMode` protection, inspired by the work of [TheTrick](TODO:..vbtimer..). This enhancement extends Elroy's original thunk by detecting when the VBA IDE is in break mode and suppresses callback execution as to avoid Office application crashes.
+
+These thunks are used to build minimal COM callback handlers (light-weight COM objects with `IUnknown` + `Invoke`) which are registered with `WebView2` as the core native interop layer. These callbacks are used in initialisation, and in ongoing event handlers when web resources are requested, to detect script completion and to retrieve cookie information.
+
+### Invoking VBA from JavaScript
+
+While it might be thought that direct calls from JavaScript to VBA are achieved in this way, instead this is achieved by utilising the standard `WebView2` API's host object functionality. Any object that implements the IDispatch interface can serve as a host object, and conveniently this includes all VBA objects. This allows you to expose any VBA class or object to JavaScript by registering it, enabling JavaScript code to call into VBA through that object.
+
+As with many `stdVBA` modules, `stdWebView` has one minor dependency on `stdICallable`. While adding any dependency is not ideal, `stdICallable` is the key component that enables integration with the rest of `stdVBA` ecosystem. Callback support in `stdWebView` is optional, but when needed, it works seamlessly with standard `stdLambda` or `stdCallback` objects.
+
+### Considerations
+
+While `stdWebView` greatly extends the possibilities of VBA, it also introduces certain trade-offs that should be carefully weighed when deciding if it is the appropriate choice for your project. For starters, `stdWebView` is only compatible on Windows OS. In principle, a similar class could be designed for MacOS with `SafariView` or `WKWebView`, but such an implementation would need a different architecture. MacOS lacks the COM infrastructure, and executable memory model that `stdWebView` relies on, and the thunking techniques used for callback integration would not function under its sandboxed runtime. Thus, at present, if your product is intended for cross-platform functionality, Userforms remain important. Additionally, there is a reliance on `WebView2`, which relies upon the chromium version of Edge. This version of edge is fully supported on Windows 10+, however if you are on previous versions of Windows OS the runtime being installed is not guaranteed.
+
+A key implementation detail is that `stdWebView` currently bootstraps `WebView2` using the `WebView2Loader.dll` shipped with Excel (via PowerQuery components). Although this enables dependency-free deployment in many managed environments, this behavior is not a documented or guaranteed public contract for Office. Consequently, future Office updates, or enterprise hardening policies may alter or remove this availability. The approach should therefore be treated as opportunistic rather than guaranteed, and production deployments should include a fallback strategy. A copy of `WebView2Loader.dll` can be downloaded and extracted from the official [`WebView2` nuget package](https://www.nuget.org/packages/Microsoft.Web.WebView2/)
+
+Although WebViews work well on both large and small projects, it should be noted that making an Excel Workbook entirely distributable may involve steering away from usage of HostName to folder mappings. Unless the HTML application is stored in a centralised remote drive, accessible to all users in the organisation, extremely large javascript applications may be infeasible to distribute or maintain. If no such remote location exists in your organisation, large codebases would either have to be written in minified javascript strings in the VBE, or code copy/pasted into Excel shapes and accessed using `ThisWorkbook.Sheets("SheetName").Shapes("ShapeName").TextFrame2.TextRange.Text`. Excel Shapes are not designed to store hundreds of lines of text, and shape performance has been known to degrade when trying to modify huge volumes of text in a shape, to the point it becomes more feasible to set the text programmatically rather than manually. It should be noted that building to a single html file, may also increase the complexity of the build process to keep the javascript front end easy to maintain while also being able to embed it in an Excel document.
+
+An alternative approach may be to store the entire HTML application in the zipped `xlsm` binary. With this option, the file will be unzipped at runtime to a temporary directory, and a hostname to folder mapping would be configured at initialisation. However, care must be taken to update the `[Content_Types].xml` files with all extensions used in the application payload, such that the additional files do not trigger an Excel file corruption error. It may be prudent to store the webview data as a zip file too, to make this process easier. For what it's worth there are existing [resource file editors which achieve this](https://leandroascierto.com/blog/vba-resource-file-editor/).
+
+It is also important to note that adopting this split architecture and augmenting VBA with modern JavaScript frontends, represents a significant shift for many developers, and the approach comes with its own learning curve. While this expansion into the JavaScript ecosystem offers tremendous potential for modernizing VBA's capabilities, it is still a relatively new pattern in the Office/VBA world, and some aspects of maintainability or team familiarity may lag behind more traditional approaches. For VBA developers in particular, keeping up with changes in web tooling and best practices may present challenges. Fortunately, large language models (LLMs), especially when available within agentic IDEs, can help bridge this gap by providing effective coding assistance, workflow guidance, and facilitating learning, making transition and maintenance more manageable even for those with less JavaScript experience.
+
+#### Security considerations
+
+The upmost care should be taken when navigating WebView2 to untrusted locations while also exposing VBA/COM host objects. In principle, any host objects could be utilised by a 3rd party attacker to extract data from an organisation. This means extra care must be put into defining the object models which untrusted websites are given access to.
+
+For example, if you are wanting to implement a feature where hyperlinks are launched when you click on a button in the webview [do not use `Shell` function directly](https://www.bleepingcomputer.com/news/microsoft/windows-11-notepad-flaw-let-files-execute-silently-via-markdown-links/) without any link sanitisation, or unless you generate the string inside your VBA environment.
+
+```
+'DONT DO THIS:
+Public Sub OpenLink(ByVal link as string)
+  Call ThisWorkbook.FollowHyperlink(link)
+End Sub
+
+'DO THIS:
+Public Sub OpenLink(ByVal link as string)
+  link = LCase(Trim(link))
+  if not InStr(1, link, "https://my/site") = 1 then Err.Raise vbObjectError + 513, "OpenLink", "URL Blocked"
+  Call ThisWorkbook.FollowHyperlink(link)
+End Sub
+
+'Ideally do this:
+Public Sub OpenGoogleMaps(ByVal lat as Double, ByVal long as Double)
+  const url_template as string = "https://maps.google.com?q={lat},{long}"
+  Dim url as string: url = url_template
+  url = replace(url, "{lat}", lat)
+  url = replace(url, "{long}", long)
+  Call ThisWorkbook.FollowHyperlink(url)
+End Sub
+```
+
+An additional risk that needs to be considered is that of supply chain attacks, which occur when a third-party library included in your project (such as a JavaScript package) is compromised and used to deliver malicious code. To mitigate this risk, avoid loading assets directly from external CDNs or untrusted sources, and instead bundle required libraries locally and review their contents before deployment. Keep dependencies to a minimum and pin them to known, vetted versions. Regularly audit and update included packages, and never hand host objects directly to libraries without constraints. These steps help ensure that your VBA application remains secure even as it gains the power of modern web tooling.
+
+It is also important to limit/constrain VirtualHost to folder mappings. By creating a folder mapping you are exposing not only the folder, but all descendents of that folder to the webview. This combined with supply chain attacks, could bring serious risk of data leaks without developer prudence.
+
+All things considered, cyber security is a major consideration with this technology, and extra care should be untertaken in how you manage these security risks in your projects, so as to ensure data isn't leaked and your applications remain secure. The key take-aways are as follows:
+
+* Treat all web content as insecure
+* Avoid generic proxies
+* Validate all message payloads/host object params.
+* Restrict webview features if not required
+
+For additional guidance on how to keep `WebView2` applications secure, check out the [Microsoft security guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security?tabs=dotnetcsharp).
 
 ## 5. Conclusion
 Summarize:
@@ -155,6 +226,10 @@ stdWebView as a bridge between VBA and web UI
 practical value in Office-centric environments
 future work: broader examples, empirical validation, more sector-specific case studies
 
+
+Additionally, many JavaScript ecosystem tools rely on build pipelines and frameworks (Webpack, Vite, React, etc.), introducing even more options, abstractions, and dependencies into your development process. For some VBA developers, the simplicity and constraint of native VBA components might actually be preferable, and what you can do is tightly bounded by what VBA provides out of the box.
+
+However, for advanced developers or those who prioritize effective, ergonomic user experiences, webview-based forms are vastly more capable and adaptable. The ability to leverage web tooling and workflows often outweighs the steeper setup cost and learning curve, but the right choice will depend on your project's priorities and the team's familiarity with both toolchains.
 
 
 
@@ -188,3 +263,4 @@ Include in Methods.
 
 
 
+Search for: `’` and replace with `'`
